@@ -587,7 +587,7 @@ receivers:
 	return s, nil
 }
 
-func NewStoreGW(e e2e.Environment, name string, bucketConfig client.BucketConfig, relabelConfig ...relabel.Config) (*e2e.InstrumentedRunnable, error) {
+func NewStoreGW(e e2e.Environment, name string, bucketConfig client.BucketConfig, cacheConfig string, relabelConfig ...relabel.Config) (*e2e.InstrumentedRunnable, error) {
 	dir := filepath.Join(e.SharedDir(), "data", "store", name)
 	container := filepath.Join(ContainerSharedDir, "data", "store", name)
 	if err := os.MkdirAll(dir, 0750); err != nil {
@@ -604,25 +604,31 @@ func NewStoreGW(e e2e.Environment, name string, bucketConfig client.BucketConfig
 		return nil, errors.Wrapf(err, "generate store relabel file: %v", relabelConfig)
 	}
 
+	args := e2e.BuildArgs(map[string]string{
+		"--debug.name":        fmt.Sprintf("store-gw-%v", name),
+		"--grpc-address":      ":9091",
+		"--grpc-grace-period": "0s",
+		"--http-address":      ":8080",
+		"--log.level":         infoLogLevel,
+		"--data-dir":          container,
+		"--objstore.config":   string(bktConfigBytes),
+		// Accelerated sync time for quicker test (3m by default).
+		"--sync-block-duration":               "3s",
+		"--block-sync-concurrency":            "1",
+		"--store.grpc.series-max-concurrency": "1",
+		"--selector.relabel-config":           string(relabelConfigBytes),
+		"--consistency-delay":                 "30m",
+	})
+
+	if cacheConfig != "" {
+		args = append(args, "--store.caching-bucket.config", cacheConfig)
+	}
+
 	store := NewService(
 		e,
 		fmt.Sprintf("store-gw-%v", name),
 		DefaultImage(),
-		e2e.NewCommand("store", e2e.BuildArgs(map[string]string{
-			"--debug.name":        fmt.Sprintf("store-gw-%v", name),
-			"--grpc-address":      ":9091",
-			"--grpc-grace-period": "0s",
-			"--http-address":      ":8080",
-			"--log.level":         infoLogLevel,
-			"--data-dir":          container,
-			"--objstore.config":   string(bktConfigBytes),
-			// Accelerated sync time for quicker test (3m by default).
-			"--sync-block-duration":               "3s",
-			"--block-sync-concurrency":            "1",
-			"--store.grpc.series-max-concurrency": "1",
-			"--selector.relabel-config":           string(relabelConfigBytes),
-			"--consistency-delay":                 "30m",
-		})...),
+		e2e.NewCommand("store", args...),
 		e2e.NewHTTPReadinessProbe("http", "/-/ready", 200, 200),
 		8080,
 		9091,

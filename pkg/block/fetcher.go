@@ -747,6 +747,22 @@ func (r *ReplicaLabelRemover) Modify(_ context.Context, metas map[ulid.ULID]*met
 	return nil
 }
 
+// filters out blocks with the max compaction level
+type MaxCompactionLevelMetaFilter struct {
+	Logger             log.Logger
+	MaxCompactionLevel int
+}
+
+func (f *MaxCompactionLevelMetaFilter) Filter(_ context.Context, metas map[ulid.ULID]*metadata.Meta, synced *extprom.TxGaugeVec) error {
+	for id, meta := range metas {
+		if meta.BlockMeta.Compaction.Level < f.MaxCompactionLevel {
+			delete(metas, id)
+		}
+	}
+
+	return nil
+}
+
 // ConsistencyDelayMetaFilter is a BaseFetcher filter that filters out blocks that are created before a specified consistency delay.
 // Not go-routine safe.
 type ConsistencyDelayMetaFilter struct {

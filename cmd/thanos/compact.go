@@ -230,6 +230,10 @@ func runCompact(
 	noCompactMarkerFilter := compact.NewGatherNoCompactionMarkFilter(logger, bkt, conf.blockMetaFetchConcurrency)
 	labelShardedMetaFilter := block.NewLabelShardedMetaFilter(relabelConfig)
 	consistencyDelayMetaFilter := block.NewConsistencyDelayMetaFilter(logger, conf.consistencyDelay, extprom.WrapRegistererWithPrefix("thanos_", reg))
+	maxCompactionLevelMetaFilter := &block.MaxCompactionLevelMetaFilter{
+		Logger:             logger,
+		MaxCompactionLevel: conf.maxCompactionLevel,
+	}
 
 	baseMetaFetcher, err := block.NewBaseFetcher(logger, conf.blockMetaFetchConcurrency, bkt, "", extprom.WrapRegistererWithPrefix("thanos_", reg))
 	if err != nil {
@@ -269,6 +273,7 @@ func runCompact(
 				ignoreDeletionMarkFilter,
 				duplicateBlocksFilter,
 				noCompactMarkerFilter,
+				maxCompactionLevelMetaFilter,
 			}, []block.MetadataModifier{block.NewReplicaLabelRemover(logger, conf.dedupReplicaLabels)},
 		)
 		cf.UpdateOnChange(func(blocks []metadata.Meta, err error) {
