@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -348,6 +349,21 @@ func TestEndpointSet_Update(t *testing.T) {
 	endpoints.CloseOne(discoveredEndpointAddr[0])
 	delete(expected[component.Sidecar], fmt.Sprintf("{a=\"b\"},{addr=\"%s\"}", discoveredEndpointAddr[0]))
 
+	// k -> component.component
+	for k, v := range endpointSet.endpointsMetric.storeNodes {
+		// k2 -> strings; v2 -> int
+		for k2, v2 := range v {
+			// modifying k2 to increase length more than 1k
+			// delete(v, k2)
+			k2 = strings.Repeat(k2, 100)
+			// Change v for later assignment
+			if _, exists := v[k2]; !exists {
+				v[k2] = v2
+			}
+		}
+		// assign to endpointSet.endpointsMetric.storeNodes[k]
+		endpointSet.endpointsMetric.storeNodes[k] = v
+	}
 	// We expect Update to tear down store client for closed store server.
 	endpointSet.Update(context.Background())
 	testutil.Equals(t, 1, len(endpointSet.endpoints), "only one service should respond just fine, so we expect one client to be ready.")
